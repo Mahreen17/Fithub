@@ -4,6 +4,12 @@ FitHub is a web-based fitness assistant that uses computer vision technologies t
 
 ---
 
+# Live Demo 
+
+ "https://fithub-r96v.onrender.com"
+ 
+
+
 ## 🚀 Features
 
 * 🎥 Real-time exercise detection (Push-ups, Squats, Lunges)
