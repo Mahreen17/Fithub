@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block head %}
+<style>
+  .exercise-container { display:flex; justify-content:center; align-items:flex-start; gap:32px; margin-top:20px; flex-wrap:wrap; }
+  .canvas-wrap { position:relative; width:640px; height:480px; background:#111; border-radius:12px; overflow:hidden; }
+  canvas#output { position:absolute; top:0; left:0; width:100%; height:100%; }
+  video#webcam  { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+  .stats-panel  { display:flex; flex-direction:column; gap:16px; min-width:200px; margin-top:12px; }
+  .stat-box     { background:#1a1a2e; border-radius:12px; padding:20px; text-align:center; color:#fff; }
+  .stat-box .val { font-size:1.4rem; font-weight:700; line-height:1.3; }
+  .stat-box .lbl { font-size:0.85rem; color:#aaa; margin-top:4px; letter-spacing:1px; text-transform:uppercase; }
+  .pose-correct { background:#1db954 !important; }
+  .pose-wrong   { background:#333 !important; }
+  #status-msg { text-align:center; color:#aaa; font-size:0.9rem; margin-top:8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="popup-overlay">
+  <div class="popup">
+    <div class="pophead"><h2><b>INSTRUCTIONS:</b></h2></div>
+    <p style="margin-top:40px; text-align:left; font-size:large; margin-left:40px;">
+      1. Stand with feet hip-width apart, weight evenly distributed.<br><br>
+      2. Engage thigh muscles and lift kneecaps toward hips.<br><br>
+      3. Draw shoulder blades down and back, lift chest up.<br><br>
+      4. Extend arms straight out to sides, parallel to the ground.<br><br>
+      5. Breathe deeply and hold the pose for several breaths.<br><br>
+    </p>
+    <button class="pop-btn1" id="popup-button1"><b>OK</b></button>
+    <button class="pop-btn2" id="popup-button2"><b>CLOSE</b></button>
+  </div>
+</div>
+
+<h1 style="text-align:center;"><b>T-POSE</b></h1>
+<p id="status-msg">Click START to begin</p>
+
+<div class="exercise-container">
+  <div class="canvas-wrap">
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="output"></canvas>
+  </div>
+  <div class="stats-panel">
+    <div class="stat-box" id="pose-status"><div class="val" id="pose-label">Unknown Pose</div><div class="lbl">Pose Status</div></div>
+    <div class="stat-box"><div class="val" id="angle-display">--</div><div class="lbl">Shoulder Angle °</div></div>
+  </div>
+</div>
+
+<div class="center" style="margin-top:24px; display:flex; justify-content:center; gap:16px;">
+  <div class="btn btn2"><div class="inner"></div><button onclick="startExercise()"><b>START</b></button></div>
+  <div class="btn btn1"><div class="inner"></div><button onclick="stopExercise()"><b>FINISH</b></button></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+<script>
+const video  = document.getElementById('webcam');
+const canvas = document.getElementById('output');
+const ctx    = canvas.getContext('2d');
+let camera = null, running = false;
+
+function calculateAngle(a, b, c) {
+  const radians = Math.atan2(c[1]-b[1], c[0]-b[0]) - Math.atan2(a[1]-b[1], a[0]-b[0]);
+  let angle = Math.abs(radians * 180 / Math.PI);
+  if (angle > 180) angle = 360 - angle;
+  return angle;
+}
+
+const pose = new Pose({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+pose.setOptions({ modelComplexity:1, smoothLandmarks:true, minDetectionConfidence:0.7, minTrackingConfidence:0.5 });
+
+pose.onResults(results => {
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  ctx.save(); ctx.scale(-1,1); ctx.translate(-canvas.width,0);
+  ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  if (results.poseLandmarks) {
+    const lm = results.poseLandmarks;
+    const leftElbowAngle  = calculateAngle([lm[11].x,lm[11].y],[lm[13].x,lm[13].y],[lm[15].x,lm[15].y]);
+    const rightElbowAngle = calculateAngle([lm[12].x,lm[12].y],[lm[14].x,lm[14].y],[lm[16].x,lm[16].y]);
+    const leftShoulderAngle  = calculateAngle([lm[13].x,lm[13].y],[lm[11].x,lm[11].y],[lm[23].x,lm[23].y]);
+    const rightShoulderAngle = calculateAngle([lm[24].x,lm[24].y],[lm[12].x,lm[12].y],[lm[14].x,lm[14].y]);
+
+    const elbowsStr = leftElbowAngle > 155 && leftElbowAngle < 205 && rightElbowAngle > 155 && rightElbowAngle < 205;
+    const shouldersOut = leftShoulderAngle > 80 && leftShoulderAngle < 110 && rightShoulderAngle > 80 && rightShoulderAngle < 110;
+    const correct = elbowsStr && shouldersOut;
+
+    drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {color: correct ? '#1db954' : '#00FF00', lineWidth:2});
+    drawLandmarks(ctx, results.poseLandmarks, {color:'#FF0000', lineWidth:1, radius:3});
+
+    const poseLabel = document.getElementById('pose-label');
+    const poseStatus = document.getElementById('pose-status');
+    poseLabel.textContent = correct ? 'T-Pose CORRECT ✓' : 'Unknown Pose';
+    poseStatus.className = 'stat-box ' + (correct ? 'pose-correct' : 'pose-wrong');
+    document.getElementById('angle-display').textContent = Math.round(leftShoulderAngle);
+  }
+});
+
+function startExercise() {
+  if (running) return; running = true;
+  document.getElementById('status-msg').textContent = 'Starting camera...';
+  camera = new Camera(video, { onFrame: async () => { await pose.send({image:video}); }, width:640, height:480 });
+  camera.start().then(() => { document.getElementById('status-msg').textContent = 'Camera active — hold your T-Pose!'; })
+    .catch(err => { document.getElementById('status-msg').textContent = 'Camera error: ' + err.message; running = false; });
+}
+
+function stopExercise() {
+  if (camera) { camera.stop(); camera = null; }
+  running = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  document.getElementById('status-msg').textContent = 'Session ended.';
+}
+</script>
+{% endblock %}

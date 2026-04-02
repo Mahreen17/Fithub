@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% block head %}
+<style>
+  .exercise-container { display: flex; justify-content: center; align-items: flex-start; gap: 32px; margin-top: 20px; flex-wrap: wrap; }
+  .canvas-wrap { position: relative; width: 640px; height: 480px; background: #111; border-radius: 12px; overflow: hidden; }
+  canvas#output { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  video#webcam  { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .stats-panel  { display: flex; flex-direction: column; gap: 16px; min-width: 180px; margin-top: 12px; }
+  .stat-box     { background: #1a1a2e; border-radius: 12px; padding: 20px; text-align: center; color: #fff; }
+  .stat-box .val { font-size: 3rem; font-weight: 700; color: #fc6d6d; line-height: 1; }
+  .stat-box .lbl { font-size: 0.85rem; color: #aaa; margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; }
+  .stage-box    { font-size: 1.1rem; font-weight: 600; padding: 10px 20px; border-radius: 8px; text-align: center; }
+  .stage-up   { background: #1db954; color: #fff; }
+  .stage-down { background: #fc6d6d; color: #fff; }
+  .stage-none { background: #333; color: #aaa; }
+  #status-msg  { text-align: center; color: #aaa; font-size: 0.9rem; margin-top: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="popup-overlay">
+  <div class="popup">
+    <div class="pophead"><h2><b>INSTRUCTIONS:</b></h2></div>
+    <p style="margin-top:40px; text-align:left; font-size:large; margin-left:40px;">
+      1. Stand with feet shoulder-width apart, palms facing forward holding a dumbbell.<br><br>
+      2. Keeping elbows close to the body, slowly raise one dumbbell towards the shoulder.<br><br>
+      3. Pause and contract the bicep at the top, then lower back down.<br><br>
+      4. Repeat alternating arms for desired reps.<br><br>
+      5. Breathe naturally, avoid swinging arms or using momentum.<br><br>
+      6. Start with lighter weights and gradually increase.<br><br>
+    </p>
+    <button class="pop-btn1" id="popup-button1"><b>OK</b></button>
+    <button class="pop-btn2" id="popup-button2"><b>CLOSE</b></button>
+  </div>
+</div>
+
+<h1 style="text-align:center;"><b>BICEP CURLS</b></h1>
+<p id="status-msg">Click START to begin</p>
+
+<div class="exercise-container">
+  <div class="canvas-wrap">
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="output"></canvas>
+  </div>
+  <div class="stats-panel">
+    <div class="stat-box">
+      <div class="val" id="rep-count">0</div>
+      <div class="lbl">Reps</div>
+    </div>
+    <div class="stat-box">
+      <div class="val" id="angle-display">--</div>
+      <div class="lbl">Angle °</div>
+    </div>
+    <div id="stage-display" class="stage-box stage-none">—</div>
+  </div>
+</div>
+
+<div class="center" style="margin-top:24px; display:flex; justify-content:center; gap:16px;">
+  <div class="btn btn2"><div class="inner"></div><button onclick="startExercise()"><b>START</b></button></div>
+  <div class="btn btn1"><div class="inner"></div><button onclick="stopExercise()"><b>FINISH</b></button></div>
+</div>
+
+<!-- MediaPipe JS -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+<script>
+const video   = document.getElementById('webcam');
+const canvas  = document.getElementById('output');
+const ctx     = canvas.getContext('2d');
+
+let counter = 0;
+let stage   = null;
+let camera  = null;
+let running = false;
+
+function calculateAngle(a, b, c) {
+  const radians = Math.atan2(c[1]-b[1], c[0]-b[0]) - Math.atan2(a[1]-b[1], a[0]-b[0]);
+  let angle = Math.abs(radians * 180 / Math.PI);
+  if (angle > 180) angle = 360 - angle;
+  return angle;
+}
+
+const pose = new Pose({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
+
+pose.onResults(results => {
+  canvas.width  = video.videoWidth  || 640;
+  canvas.height = video.videoHeight || 480;
+
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.translate(-canvas.width, 0);
+  ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  if (results.poseLandmarks) {
+    const lm = results.poseLandmarks;
+
+    // Use left arm landmarks
+    const shoulder = [lm[11].x, lm[11].y];
+    const elbow    = [lm[13].x, lm[13].y];
+    const wrist    = [lm[15].x, lm[15].y];
+    const angle    = Math.round(calculateAngle(shoulder, elbow, wrist));
+
+    // Count reps
+    if (angle > 160) stage = 'down';
+    if (angle < 30 && stage === 'down') { stage = 'up'; counter++; }
+
+    // Draw skeleton
+    drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS,
+      { color: '#00FF00', lineWidth: 2 });
+    drawLandmarks(ctx, results.poseLandmarks,
+      { color: '#FF0000', lineWidth: 1, radius: 3 });
+
+    // Update UI
+    document.getElementById('rep-count').textContent    = counter;
+    document.getElementById('angle-display').textContent = angle;
+    const sd = document.getElementById('stage-display');
+    sd.textContent  = stage ? stage.toUpperCase() : '—';
+    sd.className    = 'stage-box ' + (stage === 'up' ? 'stage-up' : stage === 'down' ? 'stage-down' : 'stage-none');
+
+    if (counter > 0 && counter % 20 === 0)
+      document.getElementById('status-msg').textContent = '🎉 Great job! ' + counter + ' reps done!';
+  }
+});
+
+function startExercise() {
+  if (running) return;
+  running = true;
+  document.getElementById('status-msg').textContent = 'Starting camera...';
+  camera = new Camera(video, {
+    onFrame: async () => { await pose.send({ image: video }); },
+    width: 640, height: 480
+  });
+  camera.start().then(() => {
+    document.getElementById('status-msg').textContent = 'Camera active — start curling!';
+  }).catch(err => {
+    document.getElementById('status-msg').textContent = 'Camera error: ' + err.message;
+    running = false;
+  });
+}
+
+function stopExercise() {
+  if (camera) { camera.stop(); camera = null; }
+  running = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  document.getElementById('status-msg').textContent = 'Session ended. Total reps: ' + counter;
+}
+</script>
+{% endblock %}

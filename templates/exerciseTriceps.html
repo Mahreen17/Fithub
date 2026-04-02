@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block head %}
+<style>
+  .exercise-container { display:flex; justify-content:center; align-items:flex-start; gap:32px; margin-top:20px; flex-wrap:wrap; }
+  .canvas-wrap { position:relative; width:640px; height:480px; background:#111; border-radius:12px; overflow:hidden; }
+  canvas#output { position:absolute; top:0; left:0; width:100%; height:100%; }
+  video#webcam  { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+  .stats-panel  { display:flex; flex-direction:column; gap:16px; min-width:180px; margin-top:12px; }
+  .stat-box     { background:#1a1a2e; border-radius:12px; padding:20px; text-align:center; color:#fff; }
+  .stat-box .val { font-size:3rem; font-weight:700; color:#fc6d6d; line-height:1; }
+  .stat-box .lbl { font-size:0.85rem; color:#aaa; margin-top:4px; letter-spacing:1px; text-transform:uppercase; }
+  .stage-box    { font-size:1.1rem; font-weight:600; padding:10px 20px; border-radius:8px; text-align:center; }
+  .stage-up { background:#1db954; color:#fff; }
+  .stage-down { background:#fc6d6d; color:#fff; }
+  .stage-none { background:#333; color:#aaa; }
+  #status-msg { text-align:center; color:#aaa; font-size:0.9rem; margin-top:8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="popup-overlay">
+  <div class="popup">
+    <div class="pophead"><h2><b>INSTRUCTIONS:</b></h2></div>
+    <p style="margin-top:40px; text-align:left; font-size:large; margin-left:40px;">
+      1. Stand with feet shoulder-width apart holding a dumbbell overhead with both hands.<br><br>
+      2. Keep upper arms close to your head, elbows pointing forward.<br><br>
+      3. Lower the dumbbell behind your head by bending at the elbows.<br><br>
+      4. Extend arms back up to the starting position.<br><br>
+      5. Keep core engaged throughout the movement.<br><br>
+    </p>
+    <button class="pop-btn1" id="popup-button1"><b>OK</b></button>
+    <button class="pop-btn2" id="popup-button2"><b>CLOSE</b></button>
+  </div>
+</div>
+
+<h1 style="text-align:center;"><b>TRICEP EXTENSIONS</b></h1>
+<p id="status-msg">Click START to begin</p>
+
+<div class="exercise-container">
+  <div class="canvas-wrap">
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="output"></canvas>
+  </div>
+  <div class="stats-panel">
+    <div class="stat-box"><div class="val" id="rep-count">0</div><div class="lbl">Reps</div></div>
+    <div class="stat-box"><div class="val" id="angle-display">--</div><div class="lbl">Arm Angle °</div></div>
+    <div id="stage-display" class="stage-box stage-none">—</div>
+  </div>
+</div>
+
+<div class="center" style="margin-top:24px; display:flex; justify-content:center; gap:16px;">
+  <div class="btn btn2"><div class="inner"></div><button onclick="startExercise()"><b>START</b></button></div>
+  <div class="btn btn1"><div class="inner"></div><button onclick="stopExercise()"><b>FINISH</b></button></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+<script>
+const video  = document.getElementById('webcam');
+const canvas = document.getElementById('output');
+const ctx    = canvas.getContext('2d');
+let counter = 0, upPos = null, downPos = null, camera = null, running = false;
+
+function calculateAngle(a, b, c) {
+  const radians = Math.atan2(c[1]-b[1], c[0]-b[0]) - Math.atan2(a[1]-b[1], a[0]-b[0]);
+  let angle = Math.abs(radians * 180 / Math.PI);
+  if (angle > 180) angle = 360 - angle;
+  return angle;
+}
+
+const pose = new Pose({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+pose.setOptions({ modelComplexity:1, smoothLandmarks:true, minDetectionConfidence:0.7, minTrackingConfidence:0.5 });
+
+pose.onResults(results => {
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  ctx.save(); ctx.scale(-1,1); ctx.translate(-canvas.width,0);
+  ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  if (results.poseLandmarks) {
+    const lm = results.poseLandmarks;
+    const leftAngle  = Math.round(calculateAngle([lm[11].x,lm[11].y],[lm[13].x,lm[13].y],[lm[15].x,lm[15].y]));
+    const rightAngle = Math.round(calculateAngle([lm[12].x,lm[12].y],[lm[14].x,lm[14].y],[lm[16].x,lm[16].y]));
+
+    if (leftAngle > 140 && rightAngle > 140) upPos = 'Up';
+    if (leftAngle < 40  && rightAngle < 40  && upPos === 'Up') downPos = 'Down';
+    if (leftAngle > 140 && rightAngle > 140 && downPos === 'Down') { counter++; upPos = null; downPos = null; }
+
+    drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {color:'#00FF00', lineWidth:2});
+    drawLandmarks(ctx, results.poseLandmarks, {color:'#FF0000', lineWidth:1, radius:3});
+
+    document.getElementById('rep-count').textContent     = counter;
+    document.getElementById('angle-display').textContent = leftAngle;
+    const sd = document.getElementById('stage-display');
+    const stage = downPos==='Down' ? 'DOWN' : upPos==='Up' ? 'UP' : '—';
+    sd.textContent = stage;
+    sd.className   = 'stage-box ' + (stage==='UP' ? 'stage-up' : stage==='DOWN' ? 'stage-down' : 'stage-none');
+  }
+});
+
+function startExercise() {
+  if (running) return; running = true;
+  document.getElementById('status-msg').textContent = 'Starting camera...';
+  camera = new Camera(video, { onFrame: async () => { await pose.send({image:video}); }, width:640, height:480 });
+  camera.start().then(() => { document.getElementById('status-msg').textContent = 'Camera active — start extending!'; })
+    .catch(err => { document.getElementById('status-msg').textContent = 'Camera error: ' + err.message; running = false; });
+}
+
+function stopExercise() {
+  if (camera) { camera.stop(); camera = null; }
+  running = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  document.getElementById('status-msg').textContent = 'Session ended. Total reps: ' + counter;
+}
+</script>
+{% endblock %}
