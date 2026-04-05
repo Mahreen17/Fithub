@@ -52,8 +52,8 @@ body{background:var(--bg)}
 </style>{% endblock %}
 {% block content %}
 <div class="ex-wrap">
-  <h1 class="ex-title">Tree Pose</h1>
-  <p class="ex-subtitle">Balance detection · Hold timer · Knee angle tracking</p>
+  <h1 class="ex-title">T-Pose</h1>
+  <p class="ex-subtitle">Shoulder &amp; elbow alignment · Instant pose detection</p>
   <div class="ex-grid">
     <div class="panel"><div class="panel-header"><div class="panel-dot"></div><span class="panel-title">Live Camera</span></div>
       <div class="panel-body">
@@ -63,7 +63,7 @@ body{background:var(--bg)}
         <div style="text-align:center"><span id="status-pill">Waiting</span></div>
         <div class="stats-row">
           <div class="stat-card"><div class="stat-val" id="hold-count">0s</div><div class="stat-lbl">Hold Time</div></div>
-          <div class="stat-card"><div class="stat-val" id="angle-display">--</div><div class="stat-lbl">Knee °</div></div>
+          <div class="stat-card"><div class="stat-val" id="angle-display">--</div><div class="stat-lbl">Shoulder °</div></div>
           <div class="stat-card"><div class="stat-val" id="time-el">0s</div><div class="stat-lbl">Session</div></div>
         </div>
         <div class="stage-pill" id="stage-display">Ready to start</div>
@@ -73,11 +73,11 @@ body{background:var(--bg)}
       <div class="panel-body">
         <div class="demo-wrap"><canvas id="demo-canvas" width="240" height="300"></canvas></div>
         <ul class="instr-list">
-          <li><span class="instr-num">1</span>Stand on one leg — shift weight completely to that foot.</li>
-          <li><span class="instr-num">2</span>Place the sole of your other foot against your inner thigh or calf.</li>
-          <li><span class="instr-num">3</span>Never place foot against the knee joint — above or below only.</li>
-          <li><span class="instr-num">4</span>Bring hands together at chest or raise arms overhead.</li>
-          <li><span class="instr-num">5</span>Fix your gaze on a still point ahead to maintain balance.</li>
+          <li><span class="instr-num">1</span>Stand tall with feet hip-width apart, weight even on both feet.</li>
+          <li><span class="instr-num">2</span>Extend both arms straight out to sides — parallel to the floor.</li>
+          <li><span class="instr-num">3</span>Keep elbows fully straight (elbow angle 155°–205°).</li>
+          <li><span class="instr-num">4</span>Shoulders should be at 80°–110° from your hips.</li>
+          <li><span class="instr-num">5</span>Hold steady and breathe — the AI will confirm your pose.</li>
         </ul>
       </div>
     </div>
@@ -85,7 +85,7 @@ body{background:var(--bg)}
   <div class="btn-row"><button class="btn-start" onclick="startEx()">▶ START</button><button class="btn-finish" onclick="stopEx()">■ FINISH</button></div>
 </div>
 <div class="feedback-overlay" id="fb-overlay">
-  <div class="feedback-box"><h2>Session Complete 🌿</h2><p class="sub">Your Tree Pose session summary</p>
+  <div class="feedback-box"><h2>Session Complete 🧘</h2><p class="sub">Your T-Pose session summary</p>
     <div class="feedback-stats">
       <div class="fb-stat"><div class="v" id="fb-hold">0s</div><div class="l">Best Hold</div></div>
       <div class="fb-stat"><div class="v" id="fb-time">0s</div><div class="l">Total Time</div></div>
@@ -100,7 +100,7 @@ body{background:var(--bg)}
 <script>
 (function(){
   const dc=document.getElementById('demo-canvas'),dctx=dc.getContext('2d');
-  const pts={neck:[120,68],hip:[120,178],lshoulder:[92,80],rshoulder:[148,80],lelbow:[100,54],relbow:[140,54],lwrist:[120,42],rwrist:[120,42],lhip:[108,212],rhip:[132,212],lknee:[106,276],rknee:[154,248],lankle:[104,316],rankle:[130,212]};
+  const pts={neck:[120,70],hip:[120,180],lshoulder:[92,82],rshoulder:[148,82],lelbow:[46,82],relbow:[194,82],lwrist:[6,82],rwrist:[234,82],lhip:[100,216],rhip:[140,216],lknee:[98,272],rknee:[142,272],lankle:[96,312],rankle:[144,312]};
   function draw(){
     dctx.clearRect(0,0,dc.width,dc.height);dctx.fillStyle='#111';dctx.fillRect(0,0,dc.width,dc.height);
     const segs=[['neck','lshoulder'],['neck','rshoulder'],['lshoulder','lelbow'],['lelbow','lwrist'],['rshoulder','relbow'],['relbow','rwrist'],['neck','hip'],['hip','lhip'],['hip','rhip'],['lhip','lknee'],['lknee','lankle'],['rhip','rknee'],['rknee','rankle']];
@@ -110,12 +110,12 @@ body{background:var(--bg)}
     dctx.beginPath();dctx.arc(pts.neck[0],pts.neck[1]-14,13,0,Math.PI*2);dctx.strokeStyle='#fc6d6d';dctx.lineWidth=3;dctx.stroke();
     dctx.fillStyle='rgba(252,109,109,0.15)';dctx.fillRect(4,270,dc.width-8,26);
     dctx.fillStyle='#fc6d6d';dctx.font='bold 12px Quicksand,sans-serif';dctx.textAlign='center';
-    dctx.fillText('One leg straight · one foot raised',dc.width/2,287);
+    dctx.fillText('Arms straight · Shoulders level',dc.width/2,287);
   }
   draw();
 })();
 const video=document.getElementById('webcam'),canvas=document.getElementById('output'),ctx=canvas.getContext('2d');
-let camera=null,running=false,elapsed=0,timer=null,holdStart=null,bestHold=0;
+let camera=null,running=false,elapsed=0,timer=null,holdStart=null,bestHold=0,currentHold=0;
 function ang(a,b,c){const r=Math.atan2(c[1]-b[1],c[0]-b[0])-Math.atan2(a[1]-b[1],a[0]-b[0]);let v=Math.abs(r*180/Math.PI);return v>180?360-v:v}
 const pose=new Pose({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/pose/'+f});
 pose.setOptions({modelComplexity:1,smoothLandmarks:true,minDetectionConfidence:0.7,minTrackingConfidence:0.5});
@@ -124,27 +124,29 @@ pose.onResults(res=>{
   ctx.save();ctx.scale(-1,1);ctx.translate(-canvas.width,0);ctx.drawImage(res.image,0,0,canvas.width,canvas.height);ctx.restore();
   if(res.poseLandmarks){
     const lm=res.poseLandmarks;
-    const lK=ang([lm[23].x,lm[23].y],[lm[25].x,lm[25].y],[lm[27].x,lm[27].y]);
-    const rK=ang([lm[24].x,lm[24].y],[lm[26].x,lm[26].y],[lm[28].x,lm[28].y]);
-    const oneStraight=(lK>165&&lK<195)||(rK>165&&rK<195);
-    const oneBent=(lK>315&&lK<335)||(rK>25&&rK<45);
-    const correct=oneStraight&&oneBent;
+    const lEA=ang([lm[11].x,lm[11].y],[lm[13].x,lm[13].y],[lm[15].x,lm[15].y]);
+    const rEA=ang([lm[12].x,lm[12].y],[lm[14].x,lm[14].y],[lm[16].x,lm[16].y]);
+    const lSA=ang([lm[13].x,lm[13].y],[lm[11].x,lm[11].y],[lm[23].x,lm[23].y]);
+    const rSA=ang([lm[24].x,lm[24].y],[lm[12].x,lm[12].y],[lm[14].x,lm[14].y]);
+    const correct=(lEA>155&&lEA<205&&rEA>155&&rEA<205&&lSA>80&&lSA<110&&rSA>80&&rSA<110);
     drawConnectors(ctx,res.poseLandmarks,POSE_CONNECTIONS,{color:correct?'#1db954':'#fc6d6d',lineWidth:2});
     drawLandmarks(ctx,res.poseLandmarks,{color:correct?'#1db954':'#ff9f9f',lineWidth:1,radius:3});
-    document.getElementById('angle-display').textContent=Math.round(lK);
+    document.getElementById('angle-display').textContent=Math.round(lSA);
     const sd=document.getElementById('stage-display');
     if(correct){
       if(!holdStart)holdStart=Date.now();
-      const h=Math.round((Date.now()-holdStart)/1000);bestHold=Math.max(bestHold,h);
-      document.getElementById('hold-count').textContent=h+'s';
-      sd.textContent='TREE POSE CORRECT ✓';sd.className='stage-pill correct';
+      currentHold=Math.round((Date.now()-holdStart)/1000);
+      bestHold=Math.max(bestHold,currentHold);
+      document.getElementById('hold-count').textContent=currentHold+'s';
+      sd.textContent='T-POSE CORRECT ✓';sd.className='stage-pill correct';
     } else {
-      holdStart=null;sd.textContent='Adjust your pose';sd.className='stage-pill down';
+      holdStart=null;currentHold=0;
+      sd.textContent='Adjust your pose';sd.className='stage-pill down';
     }
   }
 });
 function startEx(){
-  if(running)return;running=true;elapsed=0;holdStart=null;bestHold=0;
+  if(running)return;running=true;elapsed=0;holdStart=null;bestHold=0;currentHold=0;
   document.getElementById('cam-ph').style.display='none';document.getElementById('status-pill').textContent='Active';
   const st=Date.now();timer=setInterval(()=>{elapsed=Math.round((Date.now()-st)/1000);document.getElementById('time-el').textContent=elapsed+'s';},1000);
   camera=new Camera(video,{onFrame:async()=>{await pose.send({image:video});},width:640,height:480});
@@ -154,11 +156,11 @@ function stopEx(){
   if(camera){camera.stop();camera=null;}if(timer){clearInterval(timer);timer=null;}
   running=false;ctx.clearRect(0,0,canvas.width,canvas.height);document.getElementById('status-pill').textContent='Finished';
   const tips=[];
-  if(bestHold===0)tips.push({t:'Pose not detected',d:'Stand with full body visible — the AI needs to see both legs clearly.'});
-  else if(bestHold>=15)tips.push({t:'Excellent balance!',d:'Strong Tree Pose — try closing your eyes for an extra challenge.'});
-  else tips.push({t:'Good progress',d:'Aim for 20–30 second holds for meaningful balance training.'});
-  tips.push({t:'Eye focus',d:'Fix your gaze (drishti) on a single still point to stabilize your balance.'});
-  tips.push({t:'Standing foot',d:'Spread your toes and press through all four corners of your standing foot.'});
+  if(bestHold===0)tips.push({t:'Pose not detected',d:'Stand farther from camera so your full body including hands is visible.'});
+  else if(bestHold>=10)tips.push({t:'Excellent hold!',d:'Great T-Pose balance and alignment. Try holding for 30 seconds next time.'});
+  else tips.push({t:'Good start',d:'Aim to hold the T-Pose for 10–30 seconds for shoulder flexibility benefits.'});
+  tips.push({t:'Arm alignment',d:'Arms should be perfectly parallel to the floor — use a mirror as a guide.'});
+  tips.push({t:'Breathing',d:'Inhale deeply to expand your chest and create more wingspan.'});
   document.getElementById('fb-hold').textContent=bestHold+'s';document.getElementById('fb-time').textContent=elapsed+'s';
   document.getElementById('fb-tips').innerHTML=tips.map(t=>'<div class="tip-item"><span class="tip-dot">▸</span><span><strong style="color:#ddd">'+t.t+':</strong> '+t.d+'</span></div>').join('');
   document.getElementById('fb-overlay').classList.add('show');
