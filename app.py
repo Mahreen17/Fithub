@@ -2,8 +2,6 @@ from flask import Flask, render_template
 
 app = Flask(__name__)
 
-# ── Page routes ──────────────────────────────────────────────────────────────
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -44,6 +42,5 @@ def about():
 def bmi():
     return render_template('bmi.html')
 
-# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     app.run(debug=True)
